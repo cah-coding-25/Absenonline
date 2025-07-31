@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absen Online - Sistem Kehadiran Siswa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .status-btn {
+            transition: all 0.3s ease;
+            transform: scale(1);
+        }
+        .status-btn:hover {
+            transform: scale(1.05);
+        }
+        .status-btn.active {
+            transform: scale(0.95);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .grid-item {
+            transition: all 0.3s ease;
+        }
+        .grid-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .success-animation {
+            animation: successPulse 0.6s ease-in-out;
+        }
+        @keyframes successPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 text-center mb-6">📚 Sistem Absen Online</h1>
+            
+            <!-- Date and Time Display -->
+            <div class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-4 text-white mb-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-sm opacity-90">Tanggal Absen</p>
+                        <p class="text-xl font-semibold" id="currentDate"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm opacity-90">Waktu</p>
+                        <p class="text-xl font-semibold" id="currentTime"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hadir Semua Button -->
+            <div class="text-center mb-6">
+                <button onclick="hadirSemua()" class="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 transform hover:scale-105">
+                    ✅ Hadir Semua
+                </button>
+            </div>
+        </div>
+
+        <!-- Students Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Student cards will be generated here -->
+        </div>
+
+        <!-- Submit Button -->
+        <div class="text-center space-y-4">
+            <button onclick="testConnection()" class="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 transform hover:scale-105">
+                🔧 Test Koneksi
+            </button>
+            <br>
+            <button onclick="kirimAbsensi()" class="bg-blue-600 hover:bg-blue-700 text-white px-12 py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-300 transform hover:scale-105">
+                📤 Kirim Absensi
+            </button>
+        </div>
+
+        <!-- Loading Message -->
+        <div id="loadingMessage" class="hidden fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-8 py-4 rounded-xl shadow-2xl z-50">
+            <div class="flex items-center">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                <span class="font-semibold">Mengirim data absensi...</span>
+            </div>
+        </div>
+
+        <!-- Success Message -->
+        <div id="successMessage" class="hidden fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-green-500 text-white px-8 py-4 rounded-xl shadow-2xl z-50">
+            <div class="flex items-center">
+                <span class="text-2xl mr-3">✅</span>
+                <span class="font-semibold">Absen berhasil dikirim ke Google Spreadsheet!</span>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white px-8 py-4 rounded-xl shadow-2xl z-50">
+            <div class="flex items-center">
+                <span class="text-2xl mr-3">❌</span>
+                <span class="font-semibold">Gagal mengirim data. Silakan coba lagi!</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data siswa
+        const siswa = ['faiz', 'abdullah', 'ahmad', 'fiqi', 'arjun', 'arjuna'];
+        
+        // Status absensi untuk setiap siswa
+        let absensi = {};
+        
+        // Inisialisasi absensi
+        siswa.forEach(nama => {
+            absensi[nama] = 'Tanpa Keterangan';
+        });
+
+        // Update tanggal dan waktu
+        function updateDateTime() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            };
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('id-ID', options);
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('id-ID');
+        }
+
+        // Generate student cards
+        function generateStudentCards() {
+            const container = document.querySelector('.grid');
+            container.innerHTML = '';
+            
+            siswa.forEach(nama => {
+                const card = document.createElement('div');
+                card.className = 'grid-item bg-white rounded-xl shadow-lg p-6';
+                card.innerHTML = `
+                    <div class="text-center mb-4">
+                        <div class="w-16 h-16 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <span class="text-white text-2xl font-bold">${nama.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800 capitalize">${nama}</h3>
+                        <p class="text-sm text-gray-500">Status: <span id="status-${nama}" class="font-medium">${absensi[nama]}</span></p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="setStatus('${nama}', 'Hadir')" class="status-btn bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-sm font-medium">
+                            ✅ Hadir
+                        </button>
+                        <button onclick="setStatus('${nama}', 'Sakit')" class="status-btn bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-3 rounded-lg text-sm font-medium">
+                            🤒 Sakit
+                        </button>
+                        <button onclick="setStatus('${nama}', 'Izin')" class="status-btn bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-medium">
+                            📝 Izin
+                        </button>
+                        <button onclick="setStatus('${nama}', 'Tanpa Keterangan')" class="status-btn bg-red-500 hover:bg-red-600 text-white py-2 px-3 rounded-lg text-sm font-medium">
+                            ❌ Alpha
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Set status untuk siswa
+        function setStatus(nama, status) {
+            absensi[nama] = status;
+            document.getElementById(`status-${nama}`).textContent = status;
+            
+            // Visual feedback
+            const buttons = document.querySelectorAll(`[onclick*="${nama}"]`);
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            setTimeout(() => {
+                event.target.classList.remove('active');
+            }, 200);
+        }
+
+        // Hadir semua function
+        function hadirSemua() {
+            siswa.forEach(nama => {
+                absensi[nama] = 'Hadir';
+                document.getElementById(`status-${nama}`).textContent = 'Hadir';
+            });
+            
+            // Visual feedback
+            const hadirButtons = document.querySelectorAll('[onclick*="Hadir"]');
+            hadirButtons.forEach(btn => {
+                btn.classList.add('success-animation');
+                setTimeout(() => btn.classList.remove('success-animation'), 600);
+            });
+        }
+
+        // Function untuk menampilkan notifikasi
+        function showNotification(type, duration = 3000) {
+            // Sembunyikan semua notifikasi terlebih dahulu
+            document.getElementById('loadingMessage').classList.add('hidden');
+            document.getElementById('successMessage').classList.add('hidden');
+            document.getElementById('errorMessage').classList.add('hidden');
+            
+            // Tampilkan notifikasi yang sesuai
+            const notification = document.getElementById(type + 'Message');
+            notification.classList.remove('hidden');
+            notification.classList.add('success-animation');
+            
+            // Sembunyikan setelah durasi tertentu (kecuali loading)
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    notification.classList.add('hidden');
+                    notification.classList.remove('success-animation');
+                }, duration);
+            }
+        }
+
+        // Test connection function dengan debugging lengkap
+        async function testConnection() {
+            showNotification('loading');
+            console.log('🔧 Starting comprehensive connection test...');
+            
+            const scriptUrl = 'https://script.google.com/macros/s/AKfycbxrqxp9gSeY2WN_rEzgP6pqO8mm7NREzRwSB6PsC9HCUrbMkHjUstw2B-j0cNYJStrkAg/exec';
+            
+            // Test data sederhana
+            const testData = [{
+                nama: 'TEST',
+                tanggal: new Date().toLocaleDateString('id-ID'),
+                waktu: new Date().toLocaleTimeString('id-ID'),
+                status: 'Test Connection'
+            }];
+            
+            let debugInfo = `🔍 DEBUGGING INFO:\n`;
+            debugInfo += `URL: ${scriptUrl}\n`;
+            debugInfo += `Test Data: ${JSON.stringify(testData, null, 2)}\n\n`;
+            
+            // Test 1: Basic GET request
+            try {
+                console.log('🔄 Test 1: Basic GET request...');
+                debugInfo += `TEST 1: Basic GET Request\n`;
+                
+                const getResponse = await fetch(scriptUrl, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                debugInfo += `- Status: ${getResponse.status}\n`;
+                debugInfo += `- Status Text: ${getResponse.statusText}\n`;
+                debugInfo += `- Headers: ${JSON.stringify([...getResponse.headers.entries()])}\n`;
+                
+                const getResponseText = await getResponse.text();
+                debugInfo += `- Response: ${getResponseText}\n\n`;
+                
+                console.log('GET Response:', getResponseText);
+                
+            } catch (error) {
+                debugInfo += `- ERROR: ${error.message}\n\n`;
+                console.error('GET Test failed:', error);
+            }
+            
+            // Test 2: POST with JSON
+            try {
+                console.log('🔄 Test 2: POST with JSON...');
+                debugInfo += `TEST 2: POST with JSON\n`;
+                
+                const postResponse = await fetch(scriptUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData),
+                    mode: 'cors'
+                });
+                
+                debugInfo += `- Status: ${postResponse.status}\n`;
+                debugInfo += `- Status Text: ${postResponse.statusText}\n`;
+                debugInfo += `- Headers: ${JSON.stringify([...postResponse.headers.entries()])}\n`;
+                
+                const postResponseText = await postResponse.text();
+                debugInfo += `- Response: ${postResponseText}\n\n`;
+                
+                console.log('POST Response:', postResponseText);
+                
+                // Check if successful
+                if (postResponse.ok || postResponseText.includes('success') || postResponseText.includes('berhasil')) {
+                    showNotification('success', 6000);
+                    alert(`✅ KONEKSI BERHASIL!\n\n${debugInfo}\n\nSilakan cek Google Spreadsheet untuk melihat data TEST.`);
+                    return;
+                }
+                
+            } catch (error) {
+                debugInfo += `- ERROR: ${error.message}\n\n`;
+                console.error('POST Test failed:', error);
+            }
+            
+            // Test 3: GET with parameters
+            try {
+                console.log('🔄 Test 3: GET with parameters...');
+                debugInfo += `TEST 3: GET with Parameters\n`;
+                
+                const params = new URLSearchParams();
+                params.append('data', JSON.stringify(testData));
+                const getParamUrl = `${scriptUrl}?${params.toString()}`;
+                
+                const getParamResponse = await fetch(getParamUrl, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                debugInfo += `- URL: ${getParamUrl}\n`;
+                debugInfo += `- Status: ${getParamResponse.status}\n`;
+                debugInfo += `- Status Text: ${getParamResponse.statusText}\n`;
+                
+                const getParamResponseText = await getParamResponse.text();
+                debugInfo += `- Response: ${getParamResponseText}\n\n`;
+                
+                console.log('GET Param Response:', getParamResponseText);
+                
+                if (getParamResponse.ok || getParamResponseText.includes('success') || getParamResponseText.includes('berhasil')) {
+                    showNotification('success', 6000);
+                    alert(`✅ KONEKSI BERHASIL (via GET)!\n\n${debugInfo}\n\nSilakan cek Google Spreadsheet untuk melihat data TEST.`);
+                    return;
+                }
+                
+            } catch (error) {
+                debugInfo += `- ERROR: ${error.message}\n\n`;
+                console.error('GET Param Test failed:', error);
+            }
+            
+            // All tests failed
+            showNotification('error', 8000);
+            
+            debugInfo += `❌ SEMUA TEST GAGAL!\n\n`;
+            debugInfo += `KEMUNGKINAN MASALAH:\n`;
+            debugInfo += `1. Apps Script belum di-deploy dengan benar\n`;
+            debugInfo += `2. Permission tidak diset ke "Anyone"\n`;
+            debugInfo += `3. Kode Apps Script ada error\n`;
+            debugInfo += `4. Spreadsheet ID tidak benar\n`;
+            debugInfo += `5. CORS policy blocking request\n\n`;
+            debugInfo += `LANGKAH SELANJUTNYA:\n`;
+            debugInfo += `1. Buka Google Apps Script\n`;
+            debugInfo += `2. Klik Deploy > New Deployment\n`;
+            debugInfo += `3. Type: Web App\n`;
+            debugInfo += `4. Execute as: Me\n`;
+            debugInfo += `5. Who has access: Anyone\n`;
+            debugInfo += `6. Deploy dan copy URL baru\n`;
+            
+            alert(debugInfo);
+            console.log('Full Debug Info:', debugInfo);
+        }
+
+        // Kirim absensi function dengan multiple methods
+        async function kirimAbsensi() {
+            const now = new Date();
+            const tanggal = now.toLocaleDateString('id-ID');
+            const waktu = now.toLocaleTimeString('id-ID');
+            
+            const dataAbsensi = siswa.map(nama => ({
+                nama: nama,
+                tanggal: tanggal,
+                waktu: waktu,
+                status: absensi[nama]
+            }));
+            
+            // Tampilkan loading
+            showNotification('loading');
+            
+            console.log('🚀 Memulai pengiriman data:', dataAbsensi);
+            
+            const scriptUrl = 'https://script.google.com/macros/s/AKfycbxrqxp9gSeY2WN_rEzgP6pqO8mm7NREzRwSB6PsC9HCUrbMkHjUstw2B-j0cNYJStrkAg/exec';
+            console.log('📡 URL Target:', scriptUrl);
+            
+            // Method 1: POST dengan JSON
+            try {
+                console.log('🔄 Mencoba Method 1: POST JSON...');
+                const response = await fetch(scriptUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(dataAbsensi)
+                });
+                
+                console.log('📊 Response Status:', response.status);
+                console.log('📊 Response Headers:', [...response.headers.entries()]);
+                
+                const responseText = await response.text();
+                console.log('📄 Raw Response:', responseText);
+                
+                // Coba parse JSON
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                    console.log('✅ Parsed Result:', result);
+                    
+                    if (result.success) {
+                        showNotification('success', 4000);
+                        console.log('✅ Data berhasil dikirim ke spreadsheet!');
+                        return;
+                    } else {
+                        console.warn('⚠️ Server response success=false:', result.message);
+                    }
+                } catch (parseError) {
+                    console.log('⚠️ Response bukan JSON, mencoba method lain...');
+                }
+                
+                // Jika response mengandung "success" berarti kemungkinan berhasil
+                if (responseText.includes('success') || responseText.includes('berhasil')) {
+                    showNotification('success', 4000);
+                    console.log('✅ Data kemungkinan berhasil dikirim (berdasarkan response text)');
+                    return;
+                }
+                
+            } catch (error) {
+                console.error('❌ Method 1 gagal:', error.message);
+            }
+            
+            // Method 2: GET dengan query parameters (fallback)
+            try {
+                console.log('🔄 Mencoba Method 2: GET dengan query params...');
+                const params = new URLSearchParams();
+                params.append('data', JSON.stringify(dataAbsensi));
+                
+                const getUrl = `${scriptUrl}?${params.toString()}`;
+                console.log('📡 GET URL:', getUrl);
+                
+                const response = await fetch(getUrl, {
+                    method: 'GET'
+                });
+                
+                const responseText = await response.text();
+                console.log('📄 GET Response:', responseText);
+                
+                if (response.ok && (responseText.includes('success') || responseText.includes('berhasil'))) {
+                    showNotification('success', 4000);
+                    console.log('✅ Data berhasil dikirim via GET method!');
+                    return;
+                }
+                
+            } catch (error) {
+                console.error('❌ Method 2 gagal:', error.message);
+            }
+            
+            // Method 3: Form data (fallback kedua)
+            try {
+                console.log('🔄 Mencoba Method 3: Form Data...');
+                const formData = new FormData();
+                formData.append('data', JSON.stringify(dataAbsensi));
+                
+                const response = await fetch(scriptUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const responseText = await response.text();
+                console.log('📄 Form Response:', responseText);
+                
+                if (response.ok) {
+                    showNotification('success', 4000);
+                    console.log('✅ Data berhasil dikirim via Form Data!');
+                    return;
+                }
+                
+            } catch (error) {
+                console.error('❌ Method 3 gagal:', error.message);
+            }
+            
+            // Jika semua method gagal
+            showNotification('error', 5000);
+            console.error('❌ Semua method pengiriman gagal');
+            console.log('📋 Data yang gagal dikirim:', dataAbsensi);
+            
+            // Tampilkan data di alert sebagai backup
+            const dataString = dataAbsensi.map(d => `${d.nama}: ${d.status}`).join('\n');
+            alert(`Gagal mengirim ke server. Data absensi:\n\n${dataString}\n\nTanggal: ${tanggal}\nWaktu: ${waktu}\n\nSilakan screenshot dan kirim manual.`);
+        }
+
+        // Initialize
+        updateDateTime();
+        generateStudentCards();
+        setInterval(updateDateTime, 1000);
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'967dba727714afeb',t:'MTc1Mzk3MTU0MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
